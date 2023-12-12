@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/devcontainers/python
+FROM mcr.microsoft.com/devcontainers/python:3.11
 
 # Install Docker
 RUN sudo apt update && sudo apt install -y apt-transport-https ca-certificates curl software-properties-common
