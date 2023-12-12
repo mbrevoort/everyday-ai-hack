@@ -4,9 +4,7 @@ import json
 from openai import OpenAI
 from botocore.exceptions import ClientError
 import os
-from dotenv import load_dotenv
 
-load_dotenv()
 client = OpenAI(
     # This is the default and can be omitted
     api_key=os.environ.get("OPENAI_API_KEY"),
@@ -32,11 +30,21 @@ def lambda_handler(event, context):
         # Fetch the email from S3
         email_object = s3_client.get_object(Bucket=bucket_name, Key=email_key)
         email_content = email_object['Body'].read().decode('utf-8')
-
+        
         # Parse the email content
         msg = email.message_from_string(email_content)
-        print("Subject:", msg['Subject'])
-        print("From:", msg['From'])
+        subject = msg['Subject']
+        from_address = msg['From']
+        print("Subject:", subject)
+        print("From:", from_address)
+
+        # Check if from_address contains mike@brevoort.com
+        if "brevoort.com" not in from_address:
+            print("Not processing email from", from_address)
+            return {
+                'statusCode': 200,
+                'body': json.dumps('Email processed')
+            }
 
         body = ""
 
@@ -51,12 +59,12 @@ def lambda_handler(event, context):
             print("Body:", body)
 
         # Generate completion
-        completion = generate_completion(body)
-        print("Completion:", completion)
+        completion = generate_completion("Email Subject: " + subject + "\nEmail Body:\n" + body)
+        print("Response completion:", completion)
 
         # Send email
-        subject = "Re: " + msg['Subject']
-        send_email(subject, completion, [msg['From']], msg['To'])
+        subject = "Re: " + subject
+        send_email(subject, completion, [from_address], msg['To'])
 
     except Exception as e:
         print(e)
@@ -71,14 +79,14 @@ def generate_completion(text):
     response = client.chat.completions.create(
     model="gpt-4-1106-preview",
     messages=[
-        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "system", "content": "Your name is Everyday AI. You are a helpful assistant receiving commands via email. When you response, only include the text you want to send to the user as a response to an email."},
         {"role": "user", "content": text},
     ])
 
     return response.choices[0].message.content
 
 
-def send_email(subject, body, to_addresses, from_address, aws_region="us-west-2"):
+def send_email(subject, body, to_addresses, from_address, aws_region="us-east-2"):
     # Create a new SES client
     client = boto3.client('ses', region_name=aws_region)
 

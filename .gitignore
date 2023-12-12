@@ -25,7 +25,7 @@ bld/
 [Oo]bj/
 [Ll]og/
 function.zip
-build/
+package/
 
 # Visual Studio 2015/2017 cache/options directory
 .vs/
