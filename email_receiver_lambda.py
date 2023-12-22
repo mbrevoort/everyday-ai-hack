@@ -7,6 +7,7 @@ import os
 
 bucket_name = "ai-brevoort-com"
 model = "gpt-4-1106-preview"
+admin_emails = ["mike@brevoort.com"]
 
 def lambda_handler(event, context):
     # Initialize the S3 client
@@ -31,13 +32,15 @@ def lambda_handler(event, context):
         # Parse the email content
         msg = email.message_from_string(email_content)
         subject = msg['Subject']
-        from_address = msg['From']
+        from_field = msg.get('From')
+        sender_name, sender_email = email.utils.parseaddr(from_field)
+
         print("Subject:", subject)
-        print("From:", from_address)
+        print("From:", sender_name, sender_email)
 
         # Check if from_address contains mike@brevoort.com
-        if "brevoort.com" not in from_address:
-            print("Not processing email from", from_address)
+        if "brevoort.com" not in sender_email:
+            print("Not processing email from", sender_email)
             return {
                 'statusCode': 200,
                 'body': json.dumps('Email processed')
@@ -57,12 +60,12 @@ def lambda_handler(event, context):
 
         # Generate completion
         completion_input = '''Email Subject: {}\nEmail Body:\n{}'''.format(subject, body)
-        completion = generate_completion(from_address, completion_input)
+        completion = generate_completion(sender_email, completion_input)
         print("Response completion:", completion)
 
         # Send email
         subject = "Re: " + subject
-        send_email(subject, completion, [from_address], msg['To'])
+        send_email(subject, completion, [from_field], msg['To'])
 
     except Exception as e:
         print(e)
@@ -117,10 +120,12 @@ def generate_completion(sender_email, text):
         {"role": "user", "content": text},
     ]
 
+    tools = get_func_tools(sender_email)
+
     response = client.chat.completions.create(
     model=model,
     messages=messages,
-    tools=get_func_tools(),
+    tools=tools,
     tool_choice="auto")
 
     response_message = response.choices[0].message
@@ -129,8 +134,9 @@ def generate_completion(sender_email, text):
     if tool_calls:
 
         available_functions = {
-            "get_num_emails_received": get_num_emails_received,
-        } 
+            tool["function"]["name"]: globals()[tool["function"]["name"]]
+            for tool in tools
+        }
 
         messages.append(response_message) 
 
@@ -139,7 +145,8 @@ def generate_completion(sender_email, text):
             function_to_call = available_functions[function_name]
             function_args = json.loads(tool_call.function.arguments)
             function_response = function_to_call(
-                # email=sender_email,
+                sender_email,
+                **function_args
             )
             messages.append(
                 {
@@ -160,7 +167,7 @@ def generate_completion(sender_email, text):
 
 
 
-def get_num_emails_received():
+def get_num_emails_received(sender_email):
     # Initialize the S3 client
     s3_client = boto3.client('s3')
 
@@ -173,18 +180,71 @@ def get_num_emails_received():
     return str(len(response['Contents'])) + " emails received"
 
 
+def delete_all_emails_received(sender_email):
+    # Initialize the S3 client
+    s3_client = boto3.client('s3')
 
-def get_func_tools():
-    return [{
-        "type": "function",
-        "function": {
-            "name": "get_num_emails_received",
-            "description": "Gets the number of emails received by the system",
-            "parameters": {
-                "type": "object",
-                "properties": {
+    # List objects in a bucket
+    response = s3_client.list_objects_v2(
+        Bucket=bucket_name,
+        Prefix="email/"
+    )
+
+    for obj in response['Contents']:
+        s3_client.delete_object(
+            Bucket=bucket_name,
+            Key=obj['Key']
+        )
+
+    return "Deleted all emails received"
+
+def hello_world(send_email):
+    return "Hello World! (" + send_email + ")"
+
+def get_func_tools(sender_email):
+    general_functions = [
+        {
+            "type": "function",
+            "function": {
+                "name": "hello_world",
+                "description": "Say hello world",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": [],
                 },
-                "required": [],
             },
         },
-    }]
+
+    ]
+    admin_functions = [
+        {
+            "type": "function",
+            "function": {
+                "name": "get_num_emails_received",
+                "description": "Gets the number of emails received by the system",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": [],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "delete_all_emails_received",
+                "description": "Deletes all emails received by the system",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": [],
+                },
+            },
+        }
+    ]
+
+    if sender_email in admin_emails:
+        return general_functions + admin_functions
+    else:
+        return general_functions
