@@ -38,7 +38,7 @@ def lambda_handler(event, context):
         print("Subject:", subject)
         print("From:", sender_name, sender_email)
 
-        # Check if from_address contains mike@brevoort.com
+        # Check if from_address contains brevoort.com
         if "brevoort.com" not in sender_email:
             print("Not processing email from", sender_email)
             return {
@@ -201,6 +201,9 @@ def delete_all_emails_received(sender_email):
 def hello_world(send_email):
     return "Hello World! (" + send_email + ")"
 
+def connect_to_gmail(send_email):
+    return "Follow this link to connect Everyday AI to Gmail: https://ai.brevoort.com/connect-to-gmail?email=" + send_email
+
 def get_func_tools(sender_email):
     general_functions = [
         {
@@ -215,7 +218,18 @@ def get_func_tools(sender_email):
                 },
             },
         },
-
+        {
+            "type": "function",
+            "function": {
+                "name": "connect_to_gmail",
+                "description": "Connect to Gmail",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": [],
+                },
+            },
+        },
     ]
     admin_functions = [
         {
