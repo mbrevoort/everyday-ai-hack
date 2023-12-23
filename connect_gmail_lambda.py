@@ -10,16 +10,23 @@ def lambda_handler(event, context):
     email = query_params.get('email', '')
     print("email:", email)
 
-    # Generate the authorization URL for Google OAuth
-    auth_url = generate_auth_url()
+    if (email != ''):
+        # Generate the authorization URL for Google OAuth
+        auth_url = generate_auth_url()
 
-    # Redirect the user to the authorization URL
-    return {
-        'statusCode': 302,
-        'headers': {
-            'Location': auth_url
+        # Redirect the user to the authorization URL
+        return {
+            'statusCode': 302,
+            'headers': {
+                'Location': auth_url
+            }
         }
-    }
+
+    # Extract the authorization code from the query parameters
+    code = query_params['code']
+    print("code:", code)
+    token = exchange_code_for_token(code)
+    print("token:", token)
 
 def generate_auth_url():
     # Construct the authorization URL with the required parameters

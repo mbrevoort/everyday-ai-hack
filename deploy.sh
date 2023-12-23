@@ -56,9 +56,10 @@ upsert_function_url() {
     aws lambda get-function-url-config --function-name $FUNCTION_NAME --query 'FunctionUrl' --output text
 }
 
+
 upsert_function "email-ingest" "email_receiver_lambda.lambda_handler"
 upsert_function "connect-gmail" "connect_gmail_lambda.lambda_handler"
-upsert_function_url "connect-gmail"
+
 
 
 cd ..
