@@ -93,7 +93,7 @@ def search_gmail(send_email, query):
     user_id = 'me'
 
     # Call the Gmail API
-    results = service.users().messages().list(userId=user_id, q=query, maxResults=25).execute()
+    results = service.users().messages().list(userId=user_id, q=query, maxResults=10).execute()
     messages = results.get('messages', [])
 
     if not messages:
