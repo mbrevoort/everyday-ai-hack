@@ -213,7 +213,7 @@ def get_func_tools(sender_email):
                         "properties": {
                             "query": {
                                 "type": "string",
-                                "description": "The search query",
+                                "description": "A gmail compatible search query",
                             },
                         },
                         "required": ["query"],

@@ -93,7 +93,7 @@ def search_gmail(send_email, query):
     user_id = 'me'
 
     # Call the Gmail API
-    results = service.users().messages().list(userId=user_id, q=query).execute()
+    results = service.users().messages().list(userId=user_id, q=query, maxResults=25).execute()
     messages = results.get('messages', [])
 
     if not messages:
@@ -101,10 +101,10 @@ def search_gmail(send_email, query):
         return "No messages found"
     else:
         response = {}
-        response['metadata'] = "Here are the first 10 of " +str(len(messages)) + " messages found"
+        response['metadata'] = "Email messages found for the query: " + query + "."
         response['messages'] = []
 
-        for message in messages[:10]: 
+        for message in messages: 
             msg = service.users().messages().get(userId=user_id, id=message['id'], format='full').execute()
 
             headers = msg['payload']['headers']
