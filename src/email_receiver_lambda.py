@@ -1,11 +1,14 @@
+import os
 import boto3
 import email
 import json
+import base64
 from openai import OpenAI
 from botocore.exceptions import ClientError
-import os
+from googleapiclient.discovery import build
+from storage import count_keys, delete_all, get
+from google_util import get_google_creds, is_google_connected, search_gmail
 
-bucket_name = "ai-brevoort-com"
 model = "gpt-4-1106-preview"
 admin_emails = ["mike@brevoort.com"]
 
@@ -22,12 +25,7 @@ def lambda_handler(event, context):
         print("Mail:", json.dumps(mail))
 
         email_key = "email/" + message_id
-
-        print("Using S3 bucket:", bucket_name, "and key:", email_key, "to fetch email content")
-
-        # Fetch the email from S3
-        email_object = s3_client.get_object(Bucket=bucket_name, Key=email_key)
-        email_content = email_object['Body'].read().decode('utf-8')
+        email_content = get(email_key)
         
         # Parse the email content
         msg = email.message_from_string(email_content)
@@ -144,6 +142,7 @@ def generate_completion(sender_email, text):
             function_name = tool_call.function.name
             function_to_call = available_functions[function_name]
             function_args = json.loads(tool_call.function.arguments)
+            print("Calling function", function_name, "with args", function_args)
             function_response = function_to_call(
                 sender_email,
                 **function_args
@@ -165,46 +164,28 @@ def generate_completion(sender_email, text):
 
     return response.choices[0].message.content
 
-
-
 def get_num_emails_received(sender_email):
-    # Initialize the S3 client
-    s3_client = boto3.client('s3')
-
-    # List objects in a bucket
-    response = s3_client.list_objects_v2(
-        Bucket=bucket_name,
-        Prefix="email/"
-    )
-
-    return str(len(response['Contents'])) + " emails received"
-
+    return str(count_keys("email/") + " emails received")
 
 def delete_all_emails_received(sender_email):
-    # Initialize the S3 client
-    s3_client = boto3.client('s3')
-
-    # List objects in a bucket
-    response = s3_client.list_objects_v2(
-        Bucket=bucket_name,
-        Prefix="email/"
-    )
-
-    for obj in response['Contents']:
-        s3_client.delete_object(
-            Bucket=bucket_name,
-            Key=obj['Key']
-        )
-
+    delete_all("email/")
     return "Deleted all emails received"
 
 def hello_world(send_email):
     return "Hello World! (" + send_email + ")"
 
 def connect_to_gmail(send_email):
-    return "Follow this link to connect Everyday AI to Gmail: https://ai.brevoort.com/connect-to-gmail?email=" + send_email
+    creds = get_google_creds(send_email)
+    if creds != None:
+        return "Gmail is connected for " + send_email + "."
+    return "Follow this link to connect Everyday AI to Gmail: https://everydayai.brevoort.com/connect-gmail?email=" + send_email
+
+def search_emails(send_email, query):
+    response = search_gmail(send_email, query)
+    return json.dumps(response)
 
 def get_func_tools(sender_email):
+
     general_functions = [
         {
             "type": "function",
@@ -217,7 +198,30 @@ def get_func_tools(sender_email):
                     "required": [],
                 },
             },
-        },
+        }
+    ]
+
+    if (is_google_connected(sender_email)):
+        general_functions.append(
+            {
+                "type": "function",
+                "function": {
+                    "name": "search_emails",
+                    "description": "Search emails",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "The search query",
+                            },
+                        },
+                        "required": ["query"],
+                    },
+                },
+            })
+    else:
+        general_functions.append(
         {
             "type": "function",
             "function": {
@@ -229,8 +233,8 @@ def get_func_tools(sender_email):
                     "required": [],
                 },
             },
-        },
-    ]
+        })
+
     admin_functions = [
         {
             "type": "function",
