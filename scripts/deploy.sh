@@ -6,7 +6,7 @@ mkdir -p package
 cp -r src/* package/
 
 # install dependencies
-pip install --quiet --force-reinstall --upgrade -t ./package boto3 requests openai pydantic google-api-python-client google-auth-httplib2 google-auth-oauthlib
+pip install --quiet --force-reinstall --upgrade -t ./package boto3 requests openai pydantic google-api-python-client google-auth-httplib2 google-auth-oauthlib bs4
 
 cd package
 zip  -q -r function.zip email_receiver_lambda.py *

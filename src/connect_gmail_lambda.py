@@ -1,8 +1,6 @@
-import os
 from urllib.parse import urlencode
-import requests
 import json
-from google_util import generate_auth_url, exchange_code_for_creds, save_google_creds
+from google_api import generate_auth_url, exchange_code_for_credentials, save_google_credentials
 
 def lambda_handler(event, context):
     query_params = event.get('queryStringParameters', {})
@@ -42,9 +40,9 @@ def lambda_handler(event, context):
         }
 
     # Exchange the authorization code for an access token
-    creds = exchange_code_for_creds(code)
-    print("creds for " + email + ":", creds)
-    save_google_creds(email, creds)
+    credentials = exchange_code_for_credentials(code)
+    print("credentials for " + email + ":", credentials)
+    save_google_credentials(email, credentials)
 
     return {
         'statusCode': 200,

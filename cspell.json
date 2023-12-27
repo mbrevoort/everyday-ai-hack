@@ -1,0 +1,15 @@
+{
+    "version": "0.2",
+    "ignorePaths": [],
+    "dictionaryDefinitions": [],
+    "dictionaries": [],
+    "words": [
+        "boto",
+        "boto3",
+        "botocore",
+        "googleapiclient",
+        "openai"
+    ],
+    "ignoreWords": [],
+    "import": []
+}

@@ -3,40 +3,42 @@ from urllib.parse import urlencode
 import requests
 import json
 import base64
+import re
 from storage import save, get
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
+from bs4 import BeautifulSoup
 
 SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
 
-def save_google_creds(email, creds):
-    value = creds.to_json()
+def save_google_credentials(email, credentials):
+    value = credentials.to_json()
     save('google/' + email, value)
 
-def get_google_creds(email):
+def get_google_credentials(email):
     value = get('google/' + email)
     if value == None:
-        print("No google creds found for " + email)
+        print("No google credentials found for " + email)
         return None
 
     credentials_dict = json.loads(value)
-    creds = Credentials(**credentials_dict)
+    credentials = Credentials(**credentials_dict)
 
-    if not creds.valid:
-        print("creds for " + email + " not valid")
-        if creds.expired and creds.refresh_token:
-            print("creds for " + email + " expired, refreshing")
-            creds.refresh(Request())
-            save_google_creds(email, creds.to_json())
+    if not credentials.valid:
+        print("credentials for " + email + " not valid")
+        if credentials.expired and credentials.refresh_token:
+            print("credentials for " + email + " expired, refreshing")
+            credentials.refresh(Request())
+            save_google_credentials(email, credentials.to_json())
         else:
-            print("creds for " + email + " expired without refresh token")
+            print("credentials for " + email + " expired without refresh token")
             return None
         
-    return creds
+    return credentials
 
 def is_google_connected(email):
-    is_connected = get_google_creds(email) != None
+    is_connected = get_google_credentials(email) != None
     print("is_google_connected for " + email + ":", is_connected)
     return is_connected
 
@@ -54,7 +56,7 @@ def generate_auth_url(state):
     auth_url = 'https://accounts.google.com/o/oauth2/auth?' + urlencode(params)
     return auth_url
 
-def exchange_code_for_creds(code):
+def exchange_code_for_credentials(code):
     # Construct the request payload
     payload = {
         'code': code,
@@ -71,22 +73,27 @@ def exchange_code_for_creds(code):
     return convert_oauth2_tokens_to_credentials(response.json())
 
 def convert_oauth2_tokens_to_credentials(tokens):
-    creds = Credentials(
+    credentials = Credentials(
         token=tokens['access_token'],
         refresh_token=tokens['refresh_token'],
         token_uri='https://oauth2.googleapis.com/token',
         client_id=os.environ['GOOGLE_CLIENT_ID'],
         client_secret=os.environ['GOOGLE_CLIENT_SECRET']
     )
-    return creds
+    return credentials
 
 
 def search_gmail(send_email, query):
-    creds = get_google_creds(send_email)
-    if creds == None:
-        return "Gmail not connected for " + send_email
+    response = {
+        'metadata': '',
+        'messages': []
+    }
+    credentials = get_google_credentials(send_email)
+    if credentials == None:
+        response['metadata'] = "Gmail not connected for " + send_email
+        return response
     
-    service = build('gmail', 'v1', credentials=creds)
+    service = build('gmail', 'v1', credentials=credentials)
     
     # Search gmail api for emails
     # Use the API to search emails
@@ -98,11 +105,10 @@ def search_gmail(send_email, query):
 
     if not messages:
         print('No messages found.')
-        return "No messages found"
+        response['metadata'] = "No messages found"
+        return response
     else:
-        response = {}
         response['metadata'] = "Email messages found for the query: " + query + "."
-        response['messages'] = []
 
         for message in messages: 
             msg = service.users().messages().get(userId=user_id, id=message['id'], format='full').execute()
@@ -126,6 +132,12 @@ def search_gmail(send_email, query):
                 body = base64.urlsafe_b64decode(body_data).decode('utf-8')
             except:
                 body = msg['snippet']
+                
+            # strip out any html tags and content that is not text from body
+            body = BeautifulSoup(body, "html.parser").get_text()
+            
+            # remove extraneous characters
+            body = remove_extraneous_characters(body)
 
             response['messages'].append({
                 'subject': subject,
@@ -134,3 +146,16 @@ def search_gmail(send_email, query):
             })  
 
         return response
+
+def remove_extraneous_characters(s):
+    # Replace \n and \r with a space
+    s = re.sub(r'[\n\r]+', ' ', s)
+    # Optional: Remove other control characters like \t
+    s = re.sub(r'[\t]+', ' ', s)
+    # Remove unicode non-breaking spaces and similar characters
+    s = re.sub(r'[\u0080-\uFFFF]+', ' ', s)
+    # Remove extra spaces (more than one space)
+    s = re.sub(r' +', ' ', s)
+    # Optional: Remove leading and trailing whitespace
+    s = s.strip()
+    return s
